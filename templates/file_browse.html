@@ -1,0 +1,54 @@
+<!-- <!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>Browse Splunk App Files</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
+</head>
+<body class="p-4">
+<div class="container">
+    <h1>Splunk App Files</h1>
+    <a href="{{ url_for('index') }}" class="btn btn-secondary mb-3">Back to Create</a>
+    <a href="{{ url_for('download_app', app_id=app_id) }}" class="btn btn-success mb-3">Download App ZIP</a>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="alert alert-{{ category }}">{{ message }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    <div class="row">
+        <div class="col-md-4">
+            <h4>Files</h4>
+            <ul class="list-group">
+                {% for file in files %}
+                    <li class="list-group-item {% if file == selected_file %}active{% endif %}">
+                        <a href="{{ url_for('browse_files', app_id=app_id, file=file) }}" class="{% if file == selected_file %}text-white{% endif %}">{{ file }}</a>
+                    </li>
+                {% endfor %}
+            </ul>
+
+            <form method="POST" enctype="multipart/form-data" class="mt-4">
+                <label for="app_zip" class="form-label">Upload Existing App ZIP</label>
+                <input type="file" name="app_zip" id="app_zip" class="form-control" accept=".zip" />
+                <button type="submit" class="btn btn-warning mt-2">Upload ZIP</button>
+            </form>
+        </div>
+        <div class="col-md-8">
+            {% if selected_file %}
+                <h4>Edit: {{ selected_file }}</h4>
+                <form method="POST">
+                    <input type="hidden" name="filename" value="{{ selected_file }}" />
+                    <textarea name="file_content" rows="20" class="form-control">{{ file_content }}</textarea>
+                    <button type="submit" class="btn btn-primary mt-2">Save File</button>
+                </form>
+            {% else %}
+                <p>Select a file from the left to view or edit.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+</body>
+</html> -->

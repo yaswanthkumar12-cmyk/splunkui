@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Delete Splunk Index</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body {
+      padding: 2rem;
+      background-color: #f8f9fa;
+      font-family: 'Segoe UI', sans-serif;
+    }
+    .form-container {
+      max-width: 600px;
+      margin: auto;
+    }
+    .card {
+      border: none;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.05);
+    }
+    .card-title {
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <h1 class="text-center mb-5 text-danger">Delete Splunk Index</h1>
+
+  <div class="card form-container">
+    <div class="card-body">
+      <h4 class="card-title mb-3">Select Index to Delete</h4>
+      <form id="deleteIndexForm">
+        <div class="mb-3">
+          <label class="form-label">Select Index</label>
+          <select id="indexDropdown" class="form-select" required>
+            <option disabled selected>Loading indexes...</option>
+          </select>
+        </div>
+        <button type="submit" class="btn btn-danger w-100">Delete Selected Index</button>
+      </form>
+      <div id="deleteResponse" class="mt-3"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Load indexes from backend
+  fetch('/splunk_indexes')
+    .then(res => res.json())
+    .then(data => {
+      const dropdown = document.getElementById('indexDropdown');
+      dropdown.innerHTML = '<option disabled selected>Select an index</option>';
+      data.forEach(index => {
+        const opt = document.createElement('option');
+        opt.value = index;
+        opt.textContent = index;
+        dropdown.appendChild(opt);
+      });
+    })
+    .catch(() => {
+      document.getElementById('indexDropdown').innerHTML =
+        '<option disabled>Error loading indexes</option>';
+    });
+
+  // Handle delete request
+  document.getElementById('deleteIndexForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const indexName = document.getElementById('indexDropdown').value;
+    const responseDiv = document.getElementById('deleteResponse');
+    responseDiv.innerHTML = 'Processing...';
+
+    fetch('/delete_index', {
+      method: 'POST',
+      body: new URLSearchParams({ index_name: indexName }),
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+    })
+    .then(res => res.json())
+    .then(data => {
+      responseDiv.innerHTML = `<div class="alert alert-${data.status === 'success' ? 'success' : 'danger'}">${data.message}</div>`;
+    })
+    .catch(err => {
+      responseDiv.innerHTML = `<div class="alert alert-danger">Error deleting index: ${err}</div>`;
+    });
+  });
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

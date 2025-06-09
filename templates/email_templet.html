@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Deployment Workflow</title>
+  <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+  <style>
+    body {
+      font-family: 'Poppins', sans-serif;
+      background: linear-gradient(to right, #1d4350, #a43931);
+      color: #fff;
+      margin: 0;
+      padding: 40px 20px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
+    .container {
+      background: #212529;
+      padding: 40px 50px;
+      border-radius: 16px;
+      max-width: 800px;
+      width: 100%;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+    }
+    h2 {
+      font-size: 28px;
+      margin-bottom: 30px;
+      text-align: center;
+      color: #ffc107;
+    }
+    .step-flow {
+      display: flex;
+      justify-content: space-between;
+      position: relative;
+      margin-bottom: 40px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .step-flow::before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 5%;
+      right: 5%;
+      height: 4px;
+      background: #444;
+      transform: translateY(-50%);
+      z-index: 0;
+      border-radius: 2px;
+    }
+    .step {
+      flex: 1;
+      text-align: center;
+      position: relative;
+      z-index: 1;
+      min-width: 100px;
+    }
+    .step i {
+      font-size: 22px;
+      margin-bottom: 10px;
+      display: inline-block;
+      background: #444;
+      padding: 14px;
+      border-radius: 50%;
+      border: 2px solid #888;
+      color: #bbb;
+      transition: background 0.3s, border-color 0.3s, color 0.3s;
+    }
+    .step.active i {
+      background: #ffc107;
+      color: #000;
+      border-color: #fff;
+    }
+    .step-label {
+      font-size: 14px;
+      color: #ccc;
+      margin-top: 5px;
+      font-weight: 500;
+    }
+    .step.active .step-label {
+      color: #ffc107;
+      font-weight: 700;
+    }
+    .status-box {
+      text-align: center;
+      background: #343a40;
+      padding: 16px;
+      font-size: 18px;
+      border-radius: 10px;
+      font-weight: 600;
+      margin-bottom: 10px;
+    }
+    #countdown {
+      text-align: center;
+      color: #ffc107;
+      font-weight: 600;
+      margin-bottom: 20px;
+      font-size: 16px;
+      height: 24px;
+    }
+    input[type="datetime-local"] {
+      display: block;
+      margin: 10px auto;
+      padding: 10px;
+      font-size: 16px;
+      border-radius: 6px;
+      border: none;
+      width: 100%;
+      max-width: 300px;
+    }
+    button.send {
+      display: block;
+      margin: 10px auto;
+      padding: 14px 36px;
+      font-size: 16px;
+      background: linear-gradient(to right, #ffb347, #ffcc33);
+      color: #1e1e2f;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: background 0.3s ease;
+    }
+    button.send:hover {
+      background: linear-gradient(to right, #ffd700, #ff8c00);
+    }
+    button.send:disabled {
+      background: #777;
+      cursor: not-allowed;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>🚀 Deployment Workflow Tracker</h2>
+
+    <div class="step-flow">
+      <div class="step" id="step1">
+        <i class="fa-solid fa-hourglass-start"></i>
+        <div class="step-label">Pending</div>
+      </div>
+      <div class="step" id="step2">
+        <i class="fa-solid fa-envelope-circle-check"></i>
+        <div class="step-label">Email Sent</div>
+      </div>
+      <div class="step" id="step3">
+        <i class="fa-solid fa-user-check"></i>
+        <div class="step-label">Approved / Rejected</div>
+      </div>
+      <div class="step" id="step4">
+        <i class="fa-brands fa-github"></i>
+        <div class="step-label">Uploading</div>
+      </div>
+      <div class="step" id="step4_5">
+        <i class="fa-solid fa-clock"></i>
+        <div class="step-label">Awaiting Confirmation</div>
+      </div>
+      <div class="step" id="step5">
+        <i class="fa-solid fa-calendar-check"></i>
+        <div class="step-label">Scheduled</div>
+      </div>
+      <div class="step" id="step6">
+        <i class="fa-solid fa-server"></i>
+        <div class="step-label">Monitoring / Deployed</div>
+      </div>
+    </div>
+
+    <div class="status-box" id="status">Status: PENDING</div>
+    <div id="countdown"></div>
+
+    <input type="datetime-local" id="scheduleTime" style="display:none;" />
+    <button class="send" id="sendBtn" onclick="sendEmail()">📧 Send Deployment Email</button>
+    <button class="send" id="confirmScheduleBtn" onclick="confirmSchedule()" style="display: none;">✅ Confirm Schedule</button>
+  </div>
+
+  <script>
+    const socket = io();
+    const statusEl = document.getElementById("status");
+    const sendBtn = document.getElementById("sendBtn");
+    const confirmScheduleBtn = document.getElementById("confirmScheduleBtn");
+    const scheduleTimeInput = document.getElementById("scheduleTime");
+    let countdownInterval = null;
+
+    const steps = {
+      pending: document.getElementById("step1"),
+      email_sent: document.getElementById("step2"),
+      approved: document.getElementById("step3"),
+      rejected: document.getElementById("step3"),
+      uploading: document.getElementById("step4"),
+      awaiting_schedule_confirmation: document.getElementById("step4_5"),
+      schedule: document.getElementById("step5"),
+      monitor: document.getElementById("step6"),
+      deployed: document.getElementById("step6"),
+      error: null, // no step highlight on error
+    };
+
+    function startCountdown(targetTime) {
+      clearInterval(countdownInterval);
+      const countdownEl = document.getElementById("countdown");
+
+      function updateCountdown() {
+        const now = Date.now() / 1000;
+        const diff = Math.max(0, targetTime - now);
+        const minutes = Math.floor(diff / 60);
+        const seconds = Math.floor(diff % 60);
+        countdownEl.textContent = `Scheduled to deploy in ${minutes}:${seconds.toString().padStart(2, '0')}`;
+
+        if (diff <= 0) {
+          clearInterval(countdownInterval);
+          countdownEl.textContent = "Deployment starting...";
+        }
+      }
+
+      updateCountdown();
+      countdownInterval = setInterval(updateCountdown, 1000);
+    }
+
+    function updateSteps(currentStatus, extra = {}) {
+      statusEl.textContent = "Status: " + currentStatus.toUpperCase();
+      Object.values(steps).forEach(el => {
+        if (el) el.classList.remove("active");
+      });
+      if (steps[currentStatus]) {
+        steps[currentStatus].classList.add("active");
+      }
+
+      // Button and input visibility logic
+      if (currentStatus === 'pending') {
+        sendBtn.style.display = 'inline-block';
+        confirmScheduleBtn.style.display = 'none';
+        scheduleTimeInput.style.display = 'none';
+        clearInterval(countdownInterval);
+        document.getElementById("countdown").textContent = "";
+      } else if (currentStatus === 'awaiting_schedule_confirmation') {
+        sendBtn.style.display = 'none';
+        confirmScheduleBtn.style.display = 'inline-block';
+        scheduleTimeInput.style.display = 'inline-block';
+        clearInterval(countdownInterval);
+        document.getElementById("countdown").textContent = "";
+      } else {
+        sendBtn.style.display = 'none';
+        confirmScheduleBtn.style.display = 'none';
+        scheduleTimeInput.style.display = 'none';
+      }
+
+      // Countdown for schedule
+      if (currentStatus === 'schedule' && extra.scheduled_time) {
+        startCountdown(extra.scheduled_time);
+      } else if (currentStatus !== 'schedule') {
+        clearInterval(countdownInterval);
+        document.getElementById("countdown").textContent = "";
+      }
+
+      // If deployed, show final message
+      if (currentStatus === 'deployed') {
+        document.getElementById("countdown").textContent = "Deployment completed successfully! 🎉";
+      }
+    }
+
+    function sendEmail() {
+      socket.emit('send_email');
+      sendBtn.disabled = true;
+    }
+
+    function confirmSchedule() {
+      const datetimeValue = scheduleTimeInput.value;
+      if (!datetimeValue) {
+        alert("Please select a date and time to schedule the deployment.");
+        return;
+      }
+      const timestamp = Math.floor(new Date(datetimeValue).getTime() / 1000);
+      socket.emit('confirm_schedule', { scheduled_time: timestamp });
+      confirmScheduleBtn.disabled = true;
+      scheduleTimeInput.disabled = true;
+    }
+
+    socket.on("connect", () => {
+      console.log("Connected to server.");
+    });
+
+    socket.on("status_update", (data) => {
+      console.log("Status update:", data);
+      updateSteps(data.status, data);
+    });
+
+    // Initialize UI on page load
+    updateSteps("pending");
+
+    /* // Uncomment below for local simulation if needed
+    setTimeout(() => {
+      console.log("Simulating status update: uploading");
+      updateSteps("uploading");
+    }, 1000);
+
+    setTimeout(() => {
+      console.log("Simulating status update: awaiting_schedule_confirmation");
+      updateSteps("awaiting_schedule_confirmation");
+    }, 4000);
+    */
+  </script>
+</body>
+</html>

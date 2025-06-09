@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Splunk App Flow - {{ app_id }}</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
+
+  <style>
+    body {
+      background-color: #f5f8fa;
+    }
+    pre {
+      background-color: #f8f9fa;
+      border: 1px solid #dee2e6;
+      padding: 1rem;
+      max-height: 500px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      font-size: 0.9rem;
+    }
+    .decision-time {
+      font-size: 1rem;
+      color: #6c757d;
+      text-align: center;
+      margin-top: -10px;
+      margin-bottom: 20px;
+    }
+    .card-header {
+      font-weight: bold;
+    }
+    .progress-bar span {
+      display: block;
+      font-size: 0.75rem;
+      margin-top: 2px;
+    }
+  </style>
+</head>
+
+<body class="container py-4">
+  <h2 class="mb-4 text-primary">🚀 Splunk App Flow: <code>{{ app_id }}</code></h2>
+
+  {% if stage == 4 %}
+    <div id="decision-status-box" class="my-4">
+      {% if decision == 'approve' %}
+        <div class="alert alert-success fs-4 text-center">
+          ✅ This app has been <strong>APPROVED</strong> and deployed.
+        </div>
+        {% if decision_time %}
+          <div class="decision-time">Approved at: {{ decision_time }}</div>
+        {% endif %}
+        <div class="card mt-4">
+          <div class="card-header bg-success text-white">📅 Schedule Deployment</div>
+          <div class="card-body">
+            <form action="{{ url_for('schedule_deployment', app_id=app_id) }}" method="POST" id="schedule-form">
+              <div class="mb-3">
+                <label for="deploy_datetime" class="form-label">📅 Schedule Date & Time</label>
+                <input type="datetime-local" id="deploy_datetime" name="deploy_datetime" class="form-control" required />
+              </div>
+              <button type="submit" class="btn btn-success">✅ Confirm Schedule</button>
+            </form>
+          </div>
+        </div>
+
+      {% elif decision == 'reject' %}
+        <div class="alert alert-danger fs-4 text-center">
+          ❌ This app has been <strong>REJECTED</strong>.
+        </div>
+        {% if reason %}
+          <div class="alert alert-warning text-center fw-bold">🔴 Rejection Reason: {{ reason }}</div>
+        {% endif %}
+        {% if decision_time %}
+          <div class="decision-time">Rejected at: {{ decision_time }}</div>
+        {% endif %}
+
+      {% else %}
+        <div class="alert alert-warning text-center fs-5">
+          ⏳ Awaiting approver. Please check your email for approval/rejection.
+        </div>
+        <div class="text-center">
+          <div class="spinner-border text-warning" role="status">
+            <span class="visually-hidden">Waiting...</span>
+          </div>
+        </div>
+      {% endif %}
+    </div>
+  {% endif %}
+
+  {% if schedule_info %}
+    <div class="alert alert-info text-center mt-3">
+      📅 Deployment scheduled for: <strong>{{ schedule_info }}</strong>
+    </div>
+  {% endif %}
+
+  <!-- 🧭 Progress Bar with Stage Names -->
+  <div class="mb-4">
+    <h5>🧭 Current Stage: {{ stage }}</h5>
+    <div class="rounded border bg-white shadow-sm overflow-hidden">
+      <div class="progress" style="height: 60px;">
+        {% set stages = ['Edit & Save', 'Validate (btool)', 'Notify via Email', 'Approve/Reject','Uplode To Github','workflow', 'Check Logs'] %}
+        {% for i, label in enumerate(stages) %}
+          <div class="progress-bar d-flex flex-column justify-content-center align-items-center 
+                      {% if i + 1 <= stage %}bg-success text-white{% else %}bg-light text-muted{% endif %}"
+               role="progressbar"
+               style="width: 20%;">
+            <div><strong>{{ i + 1 }}</strong></div>
+            <span>{{ label }}</span>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <!-- 📋 Output Logs -->
+  <div class="card mb-4">
+    <div class="card-header bg-light">📋 Output Logs</div>
+    <div class="card-body">
+      {% if btool_logs %}
+        <pre>{{ btool_logs }}</pre>
+      {% else %}
+        <p class="text-muted">No logs available at this stage.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- 🚀 Action Buttons -->
+  <div class="d-flex gap-2 mb-4 flex-wrap">
+    {% if stage < 5 %}
+      <a href="{{ url_for('validation_workflow', app_id=app_id, stage=stage + 1) }}"
+         class="btn btn-primary"
+         {% if stage == 4 and decision not in ['approve', 'reject'] %}
+           style="pointer-events: none; opacity: 0.6;"
+         {% endif %}>
+        ➡️ Continue to Stage {{ stage + 1 }}
+      </a>
+    {% endif %}
+    <a href="{{ url_for('browse_files', app_id=app_id) }}" class="btn btn-outline-secondary">📁 Back to Files</a>
+    <a href="{{ url_for('home') }}" class="btn btn-outline-primary">🏠 Home</a>
+  </div>
+
+  <script>
+    const appId = "{{ app_id }}";
+    const socket = io();
+
+    socket.on('connect', () => {
+      console.log('✅ Connected to Socket.IO');
+    });
+
+    socket.on('decision_update', data => {
+      if (data.app_id === appId) {
+        console.log('📥 Received decision update:', data);
+        // Reload current page with updated decision and stage=4
+        window.location.href = `/validate/${appId}?stage=4&decision=${data.decision}`;
+      }
+    });
+
+    // Validate schedule form submission
+    const scheduleForm = document.getElementById('schedule-form');
+    if (scheduleForm) {
+      scheduleForm.addEventListener('submit', function(event) {
+        const dtInput = document.getElementById('deploy_datetime');
+        if (!dtInput.value) {
+          alert('⚠️ Please select a deployment date and time.');
+          dtInput.focus();
+          event.preventDefault();
+        }
+      });
+    }
+  </script>
+</body>
+</html>
